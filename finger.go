@@ -2,21 +2,19 @@ package main
 
 import (
 	"bufio"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"errors"
 	"net"
-	"os"
-	"strings"
+	"os/user"
 	"flag"
+	"strconv"
 )
 
 var port *int = flag.Int("port", 79, "Port to listen on")
 
 func main() {
 	flag.Parse()
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	ln, err := net.Listen("tcp", ":"+ strconv.Itoa(*port))
 	if err != nil {
 		panic(err)
 	}
@@ -32,9 +30,9 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
-	user, _, _ := reader.ReadLine()
+	usr, _, _ := reader.ReadLine()
 
-	info, err := getUserInfo(string(user))
+	info, err := getUserInfo(string(usr))
 	if err != nil {
 		conn.Write([]byte(err.Error()))
 	} else {
@@ -42,37 +40,14 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func getUserInfo(user string) (info []byte, err error) {
-	home, err := getHomeDir(user)
-	if err != nil {
-		return nil, err
+func getUserInfo(usr string) ([]byte, error) {
+	u, e := user.Lookup(usr)
+	if e != nil {
+		return nil, e
 	}
-	plan := fmt.Sprintf("%s/.plan", home)
-	data, err := ioutil.ReadFile(plan)
+	data, err := ioutil.ReadFile(u.HomeDir + ".plan")
 	if err != nil {
 		return data, errors.New("User doesn't have a .plan file!\n")
 	}
 	return data, nil
-}
-
-func getHomeDir(user string) (string, error) {
-	passwd, err := os.Open("/etc/passwd")
-	if err != nil {
-		return "", err
-	}
-	defer passwd.Close()
-	reader := bufio.NewReader(passwd)
-	var line []byte
-	for err != io.EOF {
-		line, _, err = reader.ReadLine()
-		data := strings.FieldsFunc(string(line), func(r rune) bool {
-			return r == ':'
-		})
-		if len(data) == 7 {
-			if data[0] == user {
-				return data[5], nil
-			}
-		}
-	}
-	return "", errors.New("User does not exist!\n")
 }
